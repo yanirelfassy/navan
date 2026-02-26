@@ -4,13 +4,14 @@ interface Props {
   budget: ParsedBudget;
 }
 
-const CATEGORY_COLORS: Record<string, { bg: string; bar: string }> = {
-  accommodation: { bg: "bg-blue-100", bar: "bg-blue-500" },
-  food: { bg: "bg-orange-100", bar: "bg-orange-500" },
-  activities: { bg: "bg-emerald-100", bar: "bg-emerald-500" },
-  transport: { bg: "bg-violet-100", bar: "bg-violet-500" },
-  other: { bg: "bg-gray-100", bar: "bg-gray-400" },
-};
+const COLORS = [
+  "#3B82F6", // blue
+  "#F97316", // orange
+  "#10B981", // emerald
+  "#8B5CF6", // violet
+  "#EC4899", // pink
+  "#6B7280", // gray
+];
 
 const CATEGORY_ICONS: Record<string, string> = {
   accommodation: "🏨",
@@ -20,80 +21,177 @@ const CATEGORY_ICONS: Record<string, string> = {
   other: "📦",
 };
 
+function getIcon(name: string): string {
+  const key = name.toLowerCase();
+  for (const [k, v] of Object.entries(CATEGORY_ICONS)) {
+    if (key.includes(k)) return v;
+  }
+  return "📦";
+}
+
 export function BudgetChart({ budget }: Props) {
-  const maxAmount = Math.max(...budget.categories.map((c) => c.amount));
   const isWithinBudget = budget.remaining >= 0;
+
+  // Build pie chart segments
+  const segments = budget.categories.map((cat, i) => ({
+    ...cat,
+    color: COLORS[i % COLORS.length],
+    icon: getIcon(cat.name),
+  }));
+
+  // Calculate SVG arcs
+  const size = 140;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = 52;
+  const innerRadius = 34;
+
+  let cumulativePercent = 0;
+  const arcs = segments.map((seg) => {
+    const startAngle = cumulativePercent * 3.6; // 360 / 100
+    cumulativePercent += seg.percentage;
+    const endAngle = cumulativePercent * 3.6;
+    return { ...seg, startAngle, endAngle };
+  });
 
   return (
     <div className="border border-gray-200 rounded-lg bg-white p-4 mb-4">
-      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-3">
+      <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
         <span>💰</span> Budget Breakdown
       </h3>
 
-      {/* Summary bar */}
-      <div className="mb-4">
-        <div className="flex justify-between text-xs mb-1.5">
-          <span className="text-gray-500">
-            Total: {formatNumber(budget.total)} {budget.currency}
-          </span>
-          <span
-            className={`font-medium ${
-              isWithinBudget ? "text-emerald-600" : "text-red-600"
-            }`}
-          >
-            {isWithinBudget
-              ? `${formatNumber(budget.remaining)} ${budget.currency} remaining`
-              : `${formatNumber(Math.abs(budget.remaining))} ${budget.currency} over budget`}
-          </span>
+      <div className="flex items-center gap-6">
+        {/* Pie chart */}
+        <div className="flex-shrink-0">
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            {arcs.map((arc, i) => (
+              <DonutSegment
+                key={i}
+                cx={cx}
+                cy={cy}
+                radius={radius}
+                innerRadius={innerRadius}
+                startAngle={arc.startAngle}
+                endAngle={arc.endAngle}
+                color={arc.color}
+              />
+            ))}
+            {/* Center text */}
+            <text
+              x={cx}
+              y={cy - 6}
+              textAnchor="middle"
+              className="text-[11px] font-bold fill-gray-800"
+            >
+              {formatNumber(budget.total)}
+            </text>
+            <text
+              x={cx}
+              y={cy + 8}
+              textAnchor="middle"
+              className="text-[9px] fill-gray-400"
+            >
+              {budget.currency}
+            </text>
+          </svg>
         </div>
-        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${
-              isWithinBudget ? "bg-emerald-500" : "bg-red-500"
-            }`}
-            style={{
-              width: `${Math.min(100, (budget.total / (budget.total + budget.remaining)) * 100)}%`,
-            }}
-          />
-        </div>
-      </div>
 
-      {/* Category bars */}
-      <div className="space-y-2.5">
-        {budget.categories.map((cat) => {
-          const key = cat.name.toLowerCase();
-          const colors = CATEGORY_COLORS[key] || CATEGORY_COLORS.other;
-          const icon = CATEGORY_ICONS[key] || CATEGORY_ICONS.other;
-          const barWidth = maxAmount > 0 ? (cat.amount / maxAmount) * 100 : 0;
-
-          return (
-            <div key={cat.name}>
-              <div className="flex justify-between items-center text-xs mb-1">
-                <span className="text-gray-600 flex items-center gap-1.5">
-                  <span>{icon}</span>
-                  <span className="capitalize">{cat.name}</span>
-                </span>
-                <span className="text-gray-500 font-medium">
-                  {formatNumber(cat.amount)} {budget.currency}
-                  {cat.percentage > 0 && (
-                    <span className="text-gray-400 ml-1">
-                      ({cat.percentage}%)
-                    </span>
-                  )}
-                </span>
-              </div>
-              <div className={`h-2 ${colors.bg} rounded-full overflow-hidden`}>
-                <div
-                  className={`h-full ${colors.bar} rounded-full transition-all`}
-                  style={{ width: `${barWidth}%` }}
+        {/* Legend */}
+        <div className="flex-1 space-y-2">
+          {segments.map((seg) => (
+            <div key={seg.name} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: seg.color }}
                 />
+                <span className="text-xs text-gray-600">
+                  {seg.icon} {seg.name}
+                </span>
               </div>
+              <span className="text-xs text-gray-500 font-medium tabular-nums">
+                {formatNumber(seg.amount)}{" "}
+                <span className="text-gray-400">({seg.percentage}%)</span>
+              </span>
             </div>
-          );
-        })}
+          ))}
+
+          {/* Remaining */}
+          <div className="pt-1.5 mt-1.5 border-t border-gray-100 flex items-center justify-between">
+            <span
+              className={`text-xs font-medium ${
+                isWithinBudget ? "text-emerald-600" : "text-red-600"
+              }`}
+            >
+              {isWithinBudget ? "Remaining" : "Over budget"}
+            </span>
+            <span
+              className={`text-xs font-semibold tabular-nums ${
+                isWithinBudget ? "text-emerald-600" : "text-red-600"
+              }`}
+            >
+              {isWithinBudget ? "" : "+"}
+              {formatNumber(Math.abs(budget.remaining))} {budget.currency}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
+}
+
+/** SVG donut segment using arc paths */
+function DonutSegment({
+  cx,
+  cy,
+  radius,
+  innerRadius,
+  startAngle,
+  endAngle,
+  color,
+}: {
+  cx: number;
+  cy: number;
+  radius: number;
+  innerRadius: number;
+  startAngle: number;
+  endAngle: number;
+  color: string;
+}) {
+  // Handle full circle edge case
+  if (endAngle - startAngle >= 359.99) {
+    return (
+      <>
+        <circle cx={cx} cy={cy} r={radius} fill={color} />
+        <circle cx={cx} cy={cy} r={innerRadius} fill="white" />
+      </>
+    );
+  }
+
+  const startRad = ((startAngle - 90) * Math.PI) / 180;
+  const endRad = ((endAngle - 90) * Math.PI) / 180;
+
+  const x1Outer = cx + radius * Math.cos(startRad);
+  const y1Outer = cy + radius * Math.sin(startRad);
+  const x2Outer = cx + radius * Math.cos(endRad);
+  const y2Outer = cy + radius * Math.sin(endRad);
+
+  const x1Inner = cx + innerRadius * Math.cos(endRad);
+  const y1Inner = cy + innerRadius * Math.sin(endRad);
+  const x2Inner = cx + innerRadius * Math.cos(startRad);
+  const y2Inner = cy + innerRadius * Math.sin(startRad);
+
+  const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+
+  const d = [
+    `M ${x1Outer} ${y1Outer}`,
+    `A ${radius} ${radius} 0 ${largeArc} 1 ${x2Outer} ${y2Outer}`,
+    `L ${x1Inner} ${y1Inner}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x2Inner} ${y2Inner}`,
+    "Z",
+  ].join(" ");
+
+  return <path d={d} fill={color} />;
 }
 
 function formatNumber(n: number): string {
