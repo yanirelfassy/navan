@@ -4,6 +4,9 @@ An agentic AI system that plans trips by reasoning through multi-step tasks, cal
 
 ## Architecture
 
+<img width="820" height="953" alt="image" src="https://github.com/user-attachments/assets/e641335e-3683-4615-9bf7-adaba764d794" />
+
+
 ```
 React (Vite)  ←—SSE—→  Express  ←→  ReAct Orchestrator  ←→  Gemini 2.5 Flash
                                           ↕
