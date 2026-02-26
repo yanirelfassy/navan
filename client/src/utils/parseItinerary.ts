@@ -58,8 +58,19 @@ export function extractTripHeader(steps: AgentStep[]): TripHeader | null {
   const weather = weatherResult?.result?.data as TripHeader["weather"];
   const currency = currencyResult?.result?.data as TripHeader["currency"];
 
-  const destination = weather?.summary?.split(" in ")[0] ||
-    (currencyResult?.args as any)?.to || "Your destination";
+  // Extract destination from tool call args or results
+  const weatherCall = steps.find(
+    (s) => s.type === "tool_call" && s.tool === "get_weather"
+  );
+  const wikiCall = steps.find(
+    (s) => s.type === "tool_call" && s.tool === "search_wikipedia"
+  );
+
+  const destination =
+    (weatherResult?.result?.data as any)?.location ||
+    (weatherCall?.args as any)?.location ||
+    (wikiCall?.args as any)?.query ||
+    "Your destination";
 
   return { destination, weather, currency };
 }
@@ -143,34 +154,42 @@ export function parseBudget(content: string): ParsedBudget | null {
 
   const section = budgetSection[0];
 
-  // Parse category lines like "**Accommodation:** 120,000 JPY (71%)" or "* Accommodation: 120,000 JPY"
-  const categoryPattern = /\*{0,2}(accommodation|food|activities|transport|other[^:]*)\*{0,2}[:\s]*([0-9,]+(?:\.\d+)?)\s*([A-Z]{3})\s*(?:\((\d+)%?\))?/gi;
-
-  let match;
-  while ((match = categoryPattern.exec(section)) !== null) {
-    categories.push({
-      name: match[1].trim(),
-      amount: parseFloat(match[2].replace(/,/g, "")),
-      percentage: match[4] ? parseInt(match[4]) : 0,
-    });
+  // Parse category lines — match any line with a label, amount, and currency code
+  // Examples: "**Accommodation:** 120,000 JPY (71%)", "* Food: 440 EUR", "- Other (Contingency): 100 EUR"
+  const lines = section.split("\n");
+  for (const line of lines) {
+    const catMatch = line.match(
+      /[-*]*\s*\*{0,2}([^:*\d][^:*]*?)\*{0,2}\s*[:\s]+([0-9,]+(?:\.\d+)?)\s*([A-Z]{3})/i
+    );
+    if (catMatch) {
+      const name = catMatch[1].trim().replace(/^\(|\)$/g, "");
+      // Skip lines that are "Total" or "Remaining"
+      if (/^(total|remaining)/i.test(name)) continue;
+      categories.push({
+        name,
+        amount: parseFloat(catMatch[2].replace(/,/g, "")),
+        percentage: 0,
+      });
+    }
   }
 
   if (categories.length === 0) return null;
 
-  // Parse total
+  // Parse total and remaining
   const totalMatch = section.match(/total[^:]*[:\s]*([0-9,]+(?:\.\d+)?)\s*([A-Z]{3})/i);
   const remainingMatch = section.match(/remaining[^:]*[:\s]*([0-9,]+(?:\.\d+)?)\s*([A-Z]{3})/i);
 
-  const total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
-  const remaining = remainingMatch ? parseFloat(remainingMatch[1].replace(/,/g, "")) : 0;
-  const currency = totalMatch?.[2] || remainingMatch?.[2] || categories[0]?.name || "USD";
+  const total = totalMatch
+    ? parseFloat(totalMatch[1].replace(/,/g, ""))
+    : categories.reduce((sum, c) => sum + c.amount, 0);
+  const remaining = remainingMatch
+    ? parseFloat(remainingMatch[1].replace(/,/g, ""))
+    : 0;
 
-  // Calculate percentages if not provided
+  // Always recalculate percentages from actual amounts
   if (total > 0) {
     for (const cat of categories) {
-      if (!cat.percentage) {
-        cat.percentage = Math.round((cat.amount / total) * 100);
-      }
+      cat.percentage = Math.round((cat.amount / total) * 100);
     }
   }
 
