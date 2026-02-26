@@ -27,7 +27,7 @@ export function createGeminiClient(apiKey: string) {
     const geminiTools = convertToolsToGeminiFormat(tools);
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       systemInstruction: systemPrompt,
       tools: geminiTools.length > 0 ? geminiTools : undefined,
     });
