@@ -32,36 +32,5 @@ export type StreamEvent =
   | { type: "tool_call"; tool: string; args: Record<string, unknown> }
   | { type: "tool_result"; tool: string; result: ToolResult }
   | { type: "answer"; content: string }
-  | { type: "itinerary"; data: Itinerary }
   | { type: "error"; message: string }
   | { type: "done" };
-
-// ---- Itinerary Types ----
-
-export interface Itinerary {
-  destination: string;
-  dates: string;
-  totalBudget: number;
-  currency: string;
-  days: ItineraryDay[];
-  budgetSummary: BudgetSummary;
-}
-
-export interface ItineraryDay {
-  day: number;
-  title: string;
-  activities: Activity[];
-}
-
-export interface Activity {
-  time: "morning" | "afternoon" | "evening";
-  description: string;
-  estimatedCost: number;
-  notes?: string;
-}
-
-export interface BudgetSummary {
-  categories: { name: string; amount: number }[];
-  total: number;
-  remaining: number;
-}

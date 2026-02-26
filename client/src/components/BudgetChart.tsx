@@ -1,4 +1,5 @@
 import { ParsedBudget } from "../utils/parseItinerary";
+import { formatNumber } from "../utils/format";
 
 interface Props {
   budget: ParsedBudget;
@@ -194,6 +195,3 @@ function DonutSegment({
   return <path d={d} fill={color} />;
 }
 
-function formatNumber(n: number): string {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}

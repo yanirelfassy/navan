@@ -10,6 +10,7 @@ import { StreamEvent } from "../types";
 const router = Router();
 
 // In-memory session storage: sessionId → Orchestrator
+const MAX_SESSIONS = 100;
 const sessions: Map<string, Orchestrator> = new Map();
 
 function getOrCreateSession(sessionId: string): Orchestrator {
@@ -18,6 +19,12 @@ function getOrCreateSession(sessionId: string): Orchestrator {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY environment variable is not set");
+    }
+
+    // Evict oldest session if at capacity
+    if (sessions.size >= MAX_SESSIONS) {
+      const oldestKey = sessions.keys().next().value!;
+      sessions.delete(oldestKey);
     }
 
     const registry = new ToolRegistry();

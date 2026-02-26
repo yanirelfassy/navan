@@ -1,4 +1,5 @@
 import { TripHeader as TripHeaderData } from "../utils/parseItinerary";
+import { formatNumber } from "../utils/format";
 
 interface Props {
   data: TripHeaderData;
@@ -68,6 +69,3 @@ export function TripHeader({ data }: Props) {
   );
 }
 
-function formatNumber(n: number): string {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}

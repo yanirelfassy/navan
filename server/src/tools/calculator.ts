@@ -67,7 +67,7 @@ export const calculatorTool: Tool = {
     const categories = Object.entries(categoryTotals).map(([name, amount]) => ({
       name,
       amount: Math.round(amount * 100) / 100,
-      percentage: Math.round((amount / total) * 100),
+      percentage: total > 0 ? Math.round((amount / total) * 100) : 0,
     }));
 
     return {
