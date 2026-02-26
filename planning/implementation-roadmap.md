@@ -85,14 +85,16 @@ Tests are written during Phase 2 (orchestrator + registry) and Phase 3 (tools).
 ### Phase 1: Project Setup
 **Branch:** `phase-1/project-setup`
 
+**Status: COMPLETE** — merged to `main`
+
 **Tasks:**
-- [ ] Initialize git repo
-- [ ] Set up `server/` — Express + TypeScript (tsconfig, package.json, dev script)
-- [ ] Set up `client/` — React + Vite + TypeScript
-- [ ] Verify both run independently (`npm run dev` on each)
-- [ ] Add Tailwind CSS to client
-- [ ] Create shared types file (or a simple `shared/` folder for types used by both)
-- [ ] Set up `.gitignore`, `.env.example`
+- [x] Initialize git repo
+- [x] Set up `server/` — Express + TypeScript (tsconfig, package.json, dev script)
+- [x] Set up `client/` — React + Vite + TypeScript
+- [x] Verify both run independently (`npm run dev` on each)
+- [x] Add Tailwind CSS to client
+- [x] Create shared types file (`server/src/types.ts`)
+- [x] Set up `.gitignore`, `.env.example`
 
 **Merge criteria:** Both client and server start with no errors. Basic "hello world" on each.
 
