@@ -60,6 +60,11 @@ function DayCard({ day }: { day: ItineraryDay }) {
                   </span>
                 )}
                 <div className="flex-1 min-w-0">
+                  {activity.title && (
+                    <p className="text-xs font-semibold text-gray-800 mb-0.5">
+                      {activity.title}
+                    </p>
+                  )}
                   <p className="text-xs text-gray-700 leading-relaxed">
                     {activity.description}
                   </p>
@@ -67,6 +72,11 @@ function DayCard({ day }: { day: ItineraryDay }) {
                     <span className="text-[10px] text-green-600 font-medium">
                       {activity.cost}
                     </span>
+                  )}
+                  {activity.gettingThere && (
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      🚃 {activity.gettingThere}
+                    </p>
                   )}
                 </div>
               </div>

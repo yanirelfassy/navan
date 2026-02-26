@@ -175,14 +175,17 @@ Tests are written during Phase 2 (orchestrator + registry) and Phase 3 (tools).
 ### Phase 6: Polish + Nice-to-Haves
 **Branch:** `phase-6/polish`
 
-Pick from these based on remaining time (ordered by impact):
+**Status: COMPLETE** — merged to `main`
 
-- [ ] **UI polish** — animations, loading states, better typography, dark mode
-- [ ] **Long-term memory** — save user preferences to JSON/localStorage, load on next session
-- [ ] **Agentic RAG** — agent decides when to use Wikipedia vs. its own knowledge (may already work naturally from the prompt)
-- [ ] **Error states** — graceful handling of network errors, empty responses
-- [ ] **Conversation history** — allow follow-up questions ("change day 3 to beach instead")
-- [ ] **README** — architecture explanation, setup instructions, screenshots
+**Tasks:**
+- [x] **Markdown rendering** — react-markdown with custom prose CSS
+- [x] **UI polish** — better layout, suggestions send directly, loading states, streaming indicator
+- [x] **ReasoningPanel improvements** — tool labels, expandable details, streaming dot
+- [x] **Gemini model fix** — switched to gemini-2.5-flash (2.0-flash deprecated)
+- [x] **dotenv path fix** — explicit path resolution for .env
+- [x] **README** — architecture, setup instructions, design decisions
+- [ ] **Long-term memory** — deferred
+- [ ] **Dark mode** — deferred
 
 **Merge criteria:** App looks professional, handles edge cases, README is complete.
 

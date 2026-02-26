@@ -3,7 +3,7 @@ import { Tool, ToolResult } from "../types";
 export const wikipediaTool: Tool = {
   name: "search_wikipedia",
   description:
-    "Search Wikipedia for information about a destination, landmark, attraction, or cultural topic. Use this when you need factual information about a specific place or topic. Do NOT use this for general travel advice — rely on your own knowledge for that.",
+    "Search Wikipedia for information about a destination, landmark, attraction, neighborhood, or cultural topic. Call this MULTIPLE times per trip — first for the destination overview, then for 2-3 specific places you want to include (e.g., a famous temple, a historic neighborhood, a landmark). The details you get back will make your itinerary specific and travel-guide quality.",
   parameters: {
     type: "object",
     properties: {

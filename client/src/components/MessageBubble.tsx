@@ -4,10 +4,14 @@ import { ReasoningPanel } from "./ReasoningPanel";
 import { TripHeader } from "./TripHeader";
 import { ItineraryCards } from "./ItineraryCards";
 import { BudgetChart } from "./BudgetChart";
+import { TravelTips } from "./TravelTips";
 import {
   extractTripHeader,
   parseItineraryDays,
+  parseStructuredResponse,
+  structuredResponseToText,
   parseBudget,
+  extractBudgetFromSteps,
 } from "../utils/parseItinerary";
 import { useMemo } from "react";
 
@@ -24,18 +28,40 @@ export function MessageBubble({ message }: Props) {
     [isUser, message.steps]
   );
 
-  const itineraryDays = useMemo(
-    () => (!isUser && message.content ? parseItineraryDays(message.content) : []),
+  const structuredResponse = useMemo(
+    () => (!isUser && message.content ? parseStructuredResponse(message.content) : null),
     [isUser, message.content]
+  );
+
+  const itineraryDays = useMemo(
+    () => {
+      if (structuredResponse) return structuredResponse.itinerary;
+      return !isUser && message.content ? parseItineraryDays(message.content) : [];
+    },
+    [isUser, message.content, structuredResponse]
+  );
+
+  const travelTips = useMemo(
+    () => structuredResponse?.travelTips ?? [],
+    [structuredResponse]
   );
 
   const budget = useMemo(
-    () => (!isUser && message.content ? parseBudget(message.content) : null),
-    [isUser, message.content]
+    () => {
+      if (isUser) return null;
+      // Prefer structured data from calculate_budget tool result
+      if (message.steps) {
+        const fromTool = extractBudgetFromSteps(message.steps);
+        if (fromTool) return fromTool;
+      }
+      // Fall back to markdown parsing
+      return message.content ? parseBudget(message.content) : null;
+    },
+    [isUser, message.steps, message.content]
   );
 
   const hasStructuredContent =
-    tripHeader || itineraryDays.length > 0 || budget;
+    tripHeader || itineraryDays.length > 0 || budget || travelTips.length > 0;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -68,14 +94,23 @@ export function MessageBubble({ message }: Props) {
               <ItineraryCards days={itineraryDays} />
             )}
 
-            {/* Full markdown response in a collapsible section */}
+            {/* Travel tips */}
+            {travelTips.length > 0 && <TravelTips tips={travelTips} />}
+
+            {/* Full response in a collapsible section */}
             <details className="mt-3 group">
               <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600 transition-colors list-none flex items-center gap-1.5">
                 <span className="group-open:rotate-90 transition-transform text-[10px]">▶</span>
                 View full response
               </summary>
               <div className="mt-2 text-sm prose prose-sm prose-gray max-w-none">
-                <ReactMarkdown>{message.content}</ReactMarkdown>
+                {structuredResponse ? (
+                  <pre className="whitespace-pre-wrap text-xs text-gray-600 font-sans">
+                    {structuredResponseToText(structuredResponse)}
+                  </pre>
+                ) : (
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                )}
               </div>
             </details>
           </div>

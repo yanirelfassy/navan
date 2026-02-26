@@ -23,10 +23,22 @@ export interface ItineraryDay {
   title: string;
   activities: {
     time: string;
+    title?: string;
     description: string;
     cost?: string;
+    gettingThere?: string;
     notes?: string;
   }[];
+}
+
+export interface TravelTip {
+  category: string;
+  tips: string[];
+}
+
+export interface StructuredResponse {
+  itinerary: ItineraryDay[];
+  travelTips: TravelTip[];
 }
 
 export interface BudgetCategory {
@@ -76,6 +88,85 @@ export function extractTripHeader(steps: AgentStep[]): TripHeader | null {
 }
 
 /**
+ * Parse structured JSON response from the LLM.
+ * Returns null if the content is not valid JSON (triggers markdown fallback).
+ */
+export function parseStructuredResponse(content: string): StructuredResponse | null {
+  let text = content.trim();
+
+  // Try JSON.parse directly first
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed?.itinerary)) {
+      return {
+        itinerary: parsed.itinerary,
+        travelTips: Array.isArray(parsed.travelTips) ? parsed.travelTips : [],
+      };
+    }
+  } catch {
+    // Not raw JSON — try stripping markdown fences / surrounding text
+  }
+
+  // Strip markdown code fences: ```json ... ``` or ``` ... ```
+  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (fenceMatch) {
+    text = fenceMatch[1].trim();
+  } else {
+    // Try to find JSON object boundaries in surrounding text
+    const firstBrace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      text = text.substring(firstBrace, lastBrace + 1);
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed?.itinerary)) {
+      return {
+        itinerary: parsed.itinerary,
+        travelTips: Array.isArray(parsed.travelTips) ? parsed.travelTips : [],
+      };
+    }
+  } catch {
+    // Not valid JSON — fall through to null
+  }
+
+  return null;
+}
+
+/**
+ * Convert a StructuredResponse to readable plain text for the collapsible section.
+ */
+export function structuredResponseToText(data: StructuredResponse): string {
+  const lines: string[] = [];
+
+  for (const day of data.itinerary) {
+    lines.push(`Day ${day.dayNumber}: ${day.title}`);
+    for (const a of day.activities) {
+      const heading = a.title ? `${a.time}: ${a.title}` : a.time;
+      lines.push(`  ${heading}`);
+      if (a.description) lines.push(`    ${a.description}`);
+      if (a.cost) lines.push(`    Cost: ${a.cost}`);
+      if (a.gettingThere) lines.push(`    Getting there: ${a.gettingThere}`);
+    }
+    lines.push("");
+  }
+
+  if (data.travelTips.length > 0) {
+    lines.push("Travel Tips");
+    for (const tip of data.travelTips) {
+      lines.push(`  ${tip.category}:`);
+      for (const t of tip.tips) {
+        lines.push(`    - ${t}`);
+      }
+    }
+  }
+
+  return lines.join("\n");
+}
+
+/**
  * Parse day-by-day itinerary from markdown content
  */
 export function parseItineraryDays(content: string): ItineraryDay[] {
@@ -90,9 +181,19 @@ export function parseItineraryDays(content: string): ItineraryDay[] {
     const dayNumber = parseInt(match[1]);
     const title = match[2]?.trim() || `Day ${dayNumber}`;
 
-    // Get content between this day header and the next (or end)
+    // Get content between this day header and the next day (or next major section)
     const startIdx = match.index! + match[0].length;
-    const endIdx = i < matches.length - 1 ? matches[i + 1].index! : content.length;
+    let endIdx: number;
+    if (i < matches.length - 1) {
+      endIdx = matches[i + 1].index!;
+    } else {
+      // For the last day, stop at the next major section heading
+      const rest = content.substring(startIdx);
+      const sectionBreak = rest.search(
+        /\n\s*\*{0,2}(budget\s+summary|travel\s+tips|packing|cultural\s+notes|important|warnings|accommodation|total\s+(estimated\s+)?cost|remaining\s+budget)/i
+      );
+      endIdx = sectionBreak !== -1 ? startIdx + sectionBreak : content.length;
+    }
     const dayContent = content.substring(startIdx, endIdx);
 
     const activities = parseActivities(dayContent);
@@ -107,43 +208,121 @@ export function parseItineraryDays(content: string): ItineraryDay[] {
 
 function parseActivities(dayContent: string): ItineraryDay["activities"] {
   const activities: ItineraryDay["activities"] = [];
-  const lines = dayContent.split("\n").filter((l) => l.trim());
+  const lines = dayContent.split("\n");
 
-  let currentTime = "";
+  let currentActivity: ItineraryDay["activities"][0] | null = null;
 
   for (const line of lines) {
-    const trimmed = line.trim().replace(/^\*+\s*/, "").replace(/\*+$/, "");
+    const raw = line.trimEnd();
+    if (!raw.trim()) continue;
 
-    // Detect time of day
-    const timeMatch = trimmed.match(/^(morning|afternoon|evening|late\s+evening|night)/i);
-    if (timeMatch) {
-      currentTime = timeMatch[1];
+    // Determine indent level: top-level bullets vs sub-bullets
+    const indent = raw.search(/\S/);
+    const stripped = raw.trim();
+
+    // Remove leading bullet markers (* or -)
+    const noBullet = stripped.replace(/^[-*]+\s*/, "");
+    // Remove all bold markers for pattern matching
+    const clean = noBullet.replace(/\*+/g, "").trim();
+
+    // Check for time-of-day header: "Morning: Activity Title" or just "Morning"
+    const timeHeader = clean.match(
+      /^(morning|afternoon|evening|late\s+evening|night)\s*[:\-–—]\s*(.*)/i
+    );
+    const timeOnly = !timeHeader && clean.match(
+      /^(morning|afternoon|evening|late\s+evening|night)$/i
+    );
+
+    if (timeHeader) {
+      // Save previous activity
+      if (currentActivity) activities.push(currentActivity);
+
+      currentActivity = {
+        time: timeHeader[1],
+        description: timeHeader[2] || "",
+        cost: undefined,
+        notes: undefined,
+      };
+      continue;
     }
 
-    // Activity lines usually start with bullet points and contain descriptions
-    if (trimmed.startsWith("-") || trimmed.startsWith("*")) {
-      const text = trimmed.replace(/^[-*]\s*/, "");
+    if (timeOnly) {
+      if (currentActivity) activities.push(currentActivity);
+      currentActivity = {
+        time: timeOnly[1],
+        description: "",
+        cost: undefined,
+        notes: undefined,
+      };
+      continue;
+    }
 
-      // Extract cost if present
-      const costMatch = text.match(/(?:estimated\s+)?cost[:\s]*([^,\n]+)/i);
-      const notesMatch = text.match(/notes?[:\s]*([^,\n]+)/i);
+    // Sub-bullet lines: extract cost or attach as description detail
+    if (currentActivity && indent >= 2) {
+      const costMatch = clean.match(/(?:estimated\s+)?cost\s*[:\-–—]\s*(.*)/i);
+      if (costMatch) {
+        currentActivity.cost = costMatch[1].trim();
+      }
+      const gettingThere = clean.match(/getting\s+there\s*[:\-–—]\s*(.*)/i);
+      if (gettingThere) {
+        currentActivity.notes = gettingThere[1].trim();
+      }
+      continue;
+    }
 
-      if (!costMatch && text.length > 10) {
-        activities.push({
-          time: currentTime || "",
-          description: text.replace(/\*+/g, "").trim(),
-          cost: costMatch?.[1]?.trim(),
-          notes: notesMatch?.[1]?.trim(),
-        });
+    // Top-level bullet that isn't a time header — treat as standalone activity
+    if (stripped.startsWith("-") || stripped.startsWith("*")) {
+      if (clean.length > 10) {
+        if (currentActivity) activities.push(currentActivity);
+        currentActivity = {
+          time: "",
+          description: clean,
+          cost: undefined,
+          notes: undefined,
+        };
       }
     }
   }
+
+  // Push the last activity
+  if (currentActivity) activities.push(currentActivity);
 
   return activities;
 }
 
 /**
- * Parse budget summary from markdown content
+ * Extract budget data directly from calculate_budget tool result (preferred — structured data)
+ */
+export function extractBudgetFromSteps(steps: AgentStep[]): ParsedBudget | null {
+  const budgetResult = steps.find(
+    (s) => s.type === "tool_result" && s.tool === "calculate_budget" && s.result?.success
+  );
+  if (!budgetResult?.result?.data) return null;
+
+  const data = budgetResult.result.data as {
+    total: number;
+    budget: number;
+    remaining: number;
+    currency: string;
+    categories: { name: string; amount: number; percentage: number }[];
+  };
+
+  if (!data.categories?.length) return null;
+
+  return {
+    categories: data.categories.map((c) => ({
+      name: c.name.charAt(0).toUpperCase() + c.name.slice(1),
+      amount: c.amount,
+      percentage: c.percentage,
+    })),
+    total: data.total,
+    remaining: data.remaining,
+    currency: data.currency,
+  };
+}
+
+/**
+ * Parse budget summary from markdown content (fallback)
  */
 export function parseBudget(content: string): ParsedBudget | null {
   const categories: BudgetCategory[] = [];
