@@ -38,11 +38,23 @@ export function createGeminiClient(apiKey: string) {
     const response = result.response;
     const candidate = response.candidates?.[0];
 
-    if (!candidate) {
-      return { type: "text", content: "No response generated." };
+    if (!candidate || !candidate.content || !candidate.content.parts) {
+      const finishReason = candidate?.finishReason;
+      return {
+        type: "text",
+        content: finishReason
+          ? `No response generated (reason: ${finishReason}). Let me try a different approach.`
+          : "No response generated. Let me try a different approach.",
+      };
     }
 
-    const parts = candidate.content.parts;
+    const parts = candidate.content.parts.filter(
+      (p: Part) => p.text || p.functionCall
+    );
+
+    if (parts.length === 0) {
+      return { type: "text", content: "Let me continue planning your trip." };
+    }
 
     // Check for function call
     const functionCallPart = parts.find((p: Part) => p.functionCall);
